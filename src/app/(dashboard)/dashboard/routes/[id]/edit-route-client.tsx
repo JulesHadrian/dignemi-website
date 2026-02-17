@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   ArrowLeft,
   Save,
@@ -16,9 +16,9 @@ import {
 } from 'lucide-react';
 
 import { contentService } from '@/services/content-service';
-import { CreateRoutePayload } from '@/types/content';
+import { UpdateContentPayload } from '@/types/content';
 
-// === SCHEMAS ===
+// === SCHEMAS (igual que en new/page.tsx) ===
 const routeDaySchema = z.object({
   day: z.number().min(1),
   title: z.string().min(1, 'Título requerido'),
@@ -52,60 +52,73 @@ const routeFormSchema = z.object({
 
 type RouteFormValues = z.infer<typeof routeFormSchema>;
 
-// === COMPONENT ===
-export default function NewRoutePage() {
+interface EditRouteClientProps {
+  id: string;
+}
+
+export function EditRouteClient({ id }: EditRouteClientProps) {
   const router = useRouter();
   const [activeDayIndex, setActiveDayIndex] = useState(0);
+
+  // Cargar datos del contenido
+  const { data: content, isLoading: isLoadingContent } = useQuery({
+    queryKey: ['content', id],
+    queryFn: () => contentService.getContentById(id),
+  });
 
   const {
     register,
     control,
     handleSubmit,
     watch,
+    reset,
     formState: { errors }
   } = useForm<RouteFormValues>({
     resolver: zodResolver(routeFormSchema),
-    defaultValues: {
-      locale: 'es-LATAM',
-      isPremium: false,
-      isPublished: false,
-      version: 1,
-      difficulty: 'principiante',
-      duration: '7 días',
-      estimatedDailyTime: '15 minutos',
-      sources: [''],
-      benefits: [''],
-      requirements: [''],
-      days: [
-        {
-          day: 1,
-          title: '',
-          description: '',
-          exerciseId: '',
-          estimatedTime: '10 minutos',
-          objectives: ['']
-        }
-      ]
-    }
   });
+
+  // Inicializar formulario con datos del servidor
+  useEffect(() => {
+    if (content && content.type === 'route') {
+      const body = content.body as any; // RouteBodyContent
+      reset({
+        title: content.title,
+        description: content.description || '',
+        topic: content.topic || '',
+        locale: content.locale || 'es-LATAM',
+        isPremium: content.isPremium || false,
+        isPublished: content.isPublished || false,
+        version: content.version || 1,
+        disclaimerId: content.disclaimerId || '',
+        intro: body.intro || '',
+        duration: body.duration || '',
+        difficulty: body.difficulty || 'principiante',
+        estimatedDailyTime: body.estimatedDailyTime || '',
+        days: body.days || [],
+        benefits: body.benefits || [''],
+        requirements: body.requirements || [''],
+        sources: content.sources || [''],
+      });
+    }
+  }, [content, reset]);
 
   const {
     fields: sourceFields,
     append: appendSource,
     remove: removeSource
-  } = useFieldArray({ control, name: 'sources' });
+  } = useFieldArray({ control, name: 'sources' as any });
 
   const {
     fields: benefitFields,
     append: appendBenefit,
     remove: removeBenefit
-  } = useFieldArray({ control, name: 'benefits' });
+  } = useFieldArray({ control, name: 'benefits' as any });
 
   const {
     fields: requirementFields,
     append: appendRequirement,
     remove: removeRequirement
-  } = useFieldArray({ control, name: 'requirements' });
+  } = useFieldArray({ control, name: 'requirements' as any });
 
   const {
     fields: dayFields,
@@ -117,45 +130,28 @@ export default function NewRoutePage() {
     fields: objectiveFields,
     append: appendObjective,
     remove: removeObjective
-  } = useFieldArray({ control, name: `days.${activeDayIndex}.objectives` });
+  } = useFieldArray({ control, name: `days.${activeDayIndex}.objectives` as any });
 
-  // Mutation para crear ruta
-  const createMutation = useMutation({
-    mutationFn: contentService.createContent,
+  // Mutation para actualizar
+  const updateMutation = useMutation({
+    mutationFn: (data: UpdateContentPayload) => contentService.updateContent(id, data),
     onSuccess: () => {
+      alert('Ruta actualizada exitosamente');
       router.push('/dashboard/routes');
     },
     onError: (error: any) => {
-      alert(`Error al crear la ruta: ${error.response?.data?.message || error.message}`);
+      alert(`Error al actualizar: ${error.response?.data?.message || error.message}`);
     }
   });
 
   const onSubmit = (data: RouteFormValues) => {
-    console.log('onSubmit ejecutado!', data);
+    console.log('Actualizando ruta...', data);
 
-    // Construir el payload solo con los campos que tienen valor
-    const payload: CreateRoutePayload = {
-      type: 'route',
-      title: data.title,
-      body: {
-        intro: data.intro,
-        duration: data.duration || '',
-        difficulty: data.difficulty || 'principiante',
-        estimatedDailyTime: data.estimatedDailyTime || '',
-        days: data.days.map(day => ({
-          day: day.day,
-          title: day.title,
-          description: day.description,
-          exerciseId: day.exerciseId || '',
-          estimatedTime: day.estimatedTime,
-          objectives: day.objectives?.filter(obj => obj.trim() !== '') || []
-        })),
-        benefits: data.benefits?.filter(b => b.trim() !== '') || [],
-        requirements: data.requirements?.filter(r => r.trim() !== '') || []
-      }
-    };
+    // Construir payload solo con campos modificados
+    const payload: UpdateContentPayload = {};
 
-    // Agregar campos opcionales solo si tienen valor
+    // Siempre incluir estos si tienen valor
+    if (data.title) payload.title = data.title;
     if (data.description?.trim()) payload.description = data.description;
     if (data.topic) payload.topic = data.topic;
     if (data.locale) payload.locale = data.locale;
@@ -163,21 +159,59 @@ export default function NewRoutePage() {
     if (data.isPublished !== undefined) payload.isPublished = data.isPublished;
     if (data.version) payload.version = data.version;
     if (data.disclaimerId?.trim()) payload.disclaimerId = data.disclaimerId;
+
+    // Body
+    payload.body = {
+      intro: data.intro,
+      duration: data.duration || '',
+      difficulty: data.difficulty || 'principiante',
+      estimatedDailyTime: data.estimatedDailyTime || '',
+      days: data.days.map(day => ({
+        day: day.day,
+        title: day.title,
+        description: day.description,
+        exerciseId: day.exerciseId || '',
+        estimatedTime: day.estimatedTime,
+        objectives: day.objectives?.filter(obj => obj.trim() !== '') || []
+      })) as any,
+      benefits: data.benefits?.filter(b => b.trim() !== '') || [],
+      requirements: data.requirements?.filter(r => r.trim() !== '') || []
+    } as any;
+
+    // Sources
     if (data.sources && data.sources.length > 0) {
       const filteredSources = data.sources.filter(s => s.trim() !== '');
       if (filteredSources.length > 0) payload.sources = filteredSources;
     }
 
     console.log('Payload a enviar:', JSON.stringify(payload, null, 2));
-    createMutation.mutate(payload);
+    updateMutation.mutate(payload);
   };
 
-  // Debug: log errores de validación
   const handleSaveClick = () => {
     console.log('Botón clickeado!');
-    console.log('Errores de validación:', errors);
+    console.log('Errores:', errors);
     handleSubmit(onSubmit)();
   };
+
+  if (isLoadingContent) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <Loader2 className="animate-spin text-blue-600" size={40} />
+      </div>
+    );
+  }
+
+  if (!content || content.type !== 'route') {
+    return (
+      <div className="p-8 text-center text-red-600">
+        <p>Contenido no encontrado o no es una ruta</p>
+        <Link href="/dashboard/routes" className="text-blue-600 hover:underline">
+          Volver a rutas
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col max-h-[calc(100vh-8rem)]">
@@ -187,15 +221,18 @@ export default function NewRoutePage() {
           <Link href="/dashboard/routes" className="text-gray-500 hover:text-gray-800">
             <ArrowLeft />
           </Link>
-          <h1 className="text-xl font-bold text-gray-900">Nueva Ruta</h1>
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Editar Ruta</h1>
+            <p className="text-xs text-gray-500">ID: {id}</p>
+          </div>
         </div>
         <button
           type="button"
           onClick={handleSaveClick}
-          disabled={createMutation.isPending}
-          className="bg-blue-600 text-white px-4 py-2 rounded flex gap-2 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto justify-center"
+          disabled={updateMutation.isPending}
+          className="bg-blue-600 text-white px-4 py-2 rounded flex gap-2 hover:bg-blue-700 disabled:opacity-50 w-full sm:w-auto justify-center"
         >
-          {createMutation.isPending ? (
+          {updateMutation.isPending ? (
             <>
               <Loader2 size={18} className="animate-spin" />
               Guardando...
@@ -203,13 +240,13 @@ export default function NewRoutePage() {
           ) : (
             <>
               <Save size={18} />
-              Guardar Ruta
+              Guardar Cambios
             </>
           )}
         </button>
       </div>
 
-      {/* LAYOUT 2 COLUMNAS */}
+      {/* FORMULARIO - Igual que en new/page.tsx */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 flex-1 min-h-0">
         {/* COL 1: METADATA */}
         <div className="lg:col-span-4 bg-white p-4 lg:p-6 rounded-xl border border-gray-200 shadow-sm overflow-y-auto max-h-[60vh] lg:max-h-full scrollbar-thin">
@@ -223,7 +260,6 @@ export default function NewRoutePage() {
               <input
                 {...register('title')}
                 className="w-full p-2 border rounded mt-1 text-sm text-black"
-                placeholder="Ruta de Calma Profunda"
               />
               {errors.title && <span className="text-red-500 text-xs">{errors.title.message}</span>}
             </div>
@@ -234,9 +270,7 @@ export default function NewRoutePage() {
               <textarea
                 {...register('description')}
                 className="w-full p-2 border rounded mt-1 text-sm h-20 text-black"
-                placeholder="Programa de 7 días para reducir ansiedad..."
               />
-              {errors.description && <span className="text-red-500 text-xs">{errors.description.message}</span>}
             </div>
 
             {/* Tema */}
@@ -248,12 +282,10 @@ export default function NewRoutePage() {
                 <option value="autoestima">Autoestima</option>
                 <option value="sueño">Sueño</option>
                 <option value="estres">Estrés</option>
-                <option value="relaciones">Relaciones</option>
               </select>
-              {errors.topic && <span className="text-red-500 text-xs">{errors.topic.message}</span>}
             </div>
 
-            {/* Locale y Premium */}
+            {/* Locale y Versión */}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-sm font-medium text-gray-700">Idioma</label>
@@ -281,17 +313,16 @@ export default function NewRoutePage() {
               </label>
               <label className="flex items-center gap-2">
                 <input type="checkbox" {...register('isPublished')} className="rounded" />
-                <span className="text-sm text-gray-700">Publicar inmediatamente</span>
+                <span className="text-sm text-gray-700">Publicado</span>
               </label>
             </div>
 
-            {/* Disclaimer ID */}
+            {/* Disclaimer */}
             <div>
-              <label className="text-sm font-medium text-gray-700">ID de Disclaimer (opcional)</label>
+              <label className="text-sm font-medium text-gray-700">ID de Disclaimer</label>
               <input
                 {...register('disclaimerId')}
                 className="w-full p-2 border rounded mt-1 text-sm text-black"
-                placeholder="disclaimer-mental-health-001"
               />
             </div>
 
@@ -301,12 +332,11 @@ export default function NewRoutePage() {
               <textarea
                 {...register('intro')}
                 className="w-full p-2 border rounded mt-1 text-sm h-24 text-black"
-                placeholder="Esta ruta te ayudará a..."
               />
               {errors.intro && <span className="text-red-500 text-xs">{errors.intro.message}</span>}
             </div>
 
-            {/* Duración y Dificultad */}
+            {/* Duración */}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-sm font-medium text-gray-700">Duración</label>
@@ -345,25 +375,16 @@ export default function NewRoutePage() {
                     <input
                       {...register(`benefits.${index}`)}
                       className="flex-1 p-2 border rounded text-sm text-black"
-                      placeholder="Reducción de ansiedad"
                     />
                     {benefitFields.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeBenefit(index)}
-                        className="text-red-500 hover:text-red-700"
-                      >
+                      <button type="button" onClick={() => removeBenefit(index)} className="text-red-500">
                         <Trash2 size={18} />
                       </button>
                     )}
                   </div>
                 ))}
-                <button
-                  type="button"
-                  onClick={() => appendBenefit('')}
-                  className="text-blue-600 text-sm hover:text-blue-800 flex items-center gap-1"
-                >
-                  <Plus size={16} /> Agregar beneficio
+                <button type="button" onClick={() => appendBenefit('' as any)} className="text-blue-600 text-sm flex items-center gap-1">
+                  <Plus size={16} /> Agregar
                 </button>
               </div>
             </div>
@@ -377,25 +398,16 @@ export default function NewRoutePage() {
                     <input
                       {...register(`requirements.${index}`)}
                       className="flex-1 p-2 border rounded text-sm text-black"
-                      placeholder="Espacio tranquilo"
                     />
                     {requirementFields.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeRequirement(index)}
-                        className="text-red-500 hover:text-red-700"
-                      >
+                      <button type="button" onClick={() => removeRequirement(index)} className="text-red-500">
                         <Trash2 size={18} />
                       </button>
                     )}
                   </div>
                 ))}
-                <button
-                  type="button"
-                  onClick={() => appendRequirement('')}
-                  className="text-blue-600 text-sm hover:text-blue-800 flex items-center gap-1"
-                >
-                  <Plus size={16} /> Agregar requisito
+                <button type="button" onClick={() => appendRequirement('' as any)} className="text-blue-600 text-sm flex items-center gap-1">
+                  <Plus size={16} /> Agregar
                 </button>
               </div>
             </div>
@@ -409,25 +421,16 @@ export default function NewRoutePage() {
                     <input
                       {...register(`sources.${index}`)}
                       className="flex-1 p-2 border rounded text-sm text-black"
-                      placeholder="https://pubmed.ncbi.nlm.nih.gov/..."
                     />
                     {sourceFields.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeSource(index)}
-                        className="text-red-500 hover:text-red-700"
-                      >
+                      <button type="button" onClick={() => removeSource(index)} className="text-red-500">
                         <Trash2 size={18} />
                       </button>
                     )}
                   </div>
                 ))}
-                <button
-                  type="button"
-                  onClick={() => appendSource('')}
-                  className="text-blue-600 text-sm hover:text-blue-800 flex items-center gap-1"
-                >
-                  <Plus size={16} /> Agregar fuente
+                <button type="button" onClick={() => appendSource('' as any)} className="text-blue-600 text-sm flex items-center gap-1">
+                  <Plus size={16} /> Agregar
                 </button>
               </div>
             </div>
@@ -436,17 +439,15 @@ export default function NewRoutePage() {
 
         {/* COL 2: DÍAS */}
         <div className="lg:col-span-8 flex flex-col gap-4 min-h-0">
-          {/* Navegación de Días */}
-          <div className="bg-white p-2 rounded-lg border border-gray-200 flex gap-2 overflow-x-auto scrollbar-thin">
+          {/* Navegación */}
+          <div className="bg-white p-2 rounded-lg border flex gap-2 overflow-x-auto scrollbar-thin">
             {dayFields.map((field, idx) => (
               <button
                 key={field.id}
                 type="button"
                 onClick={() => setActiveDayIndex(idx)}
-                className={`px-3 py-1.5 rounded text-sm font-medium transition whitespace-nowrap flex-shrink-0 ${
-                  idx === activeDayIndex
-                    ? 'bg-slate-800 text-white shadow'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                className={`px-3 py-1.5 rounded text-sm font-medium whitespace-nowrap flex-shrink-0 ${
+                  idx === activeDayIndex ? 'bg-slate-800 text-white' : 'bg-gray-100 text-gray-600'
                 }`}
               >
                 Día {watch(`days.${idx}.day`)}
@@ -454,26 +455,17 @@ export default function NewRoutePage() {
             ))}
             <button
               type="button"
-              onClick={() => appendDay({
-                day: dayFields.length + 1,
-                title: '',
-                description: '',
-                exerciseId: '',
-                estimatedTime: '10 minutos',
-                objectives: ['']
-              })}
-              className="px-2 py-1.5 text-blue-600 hover:bg-blue-50 rounded flex-shrink-0"
+              onClick={() => appendDay({ day: dayFields.length + 1, title: '', description: '', estimatedTime: '10 minutos', objectives: [''] })}
+              className="px-2 py-1.5 text-blue-600 rounded flex-shrink-0"
             >
               <Plus size={18} />
             </button>
           </div>
 
-          {/* Editor del Día Activo */}
-          <div className="flex-1 bg-gray-50 rounded-xl border border-gray-200 p-4 lg:p-6 overflow-y-auto min-h-0 max-h-[70vh] lg:max-h-full scrollbar-thin">
-            <div className="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-              <h3 className="text-lg font-bold text-gray-800">
-                Día {watch(`days.${activeDayIndex}.day`)}
-              </h3>
+          {/* Editor de Día */}
+          <div className="flex-1 bg-gray-50 rounded-xl border p-4 lg:p-6 overflow-y-auto scrollbar-thin max-h-[70vh] lg:max-h-full">
+            <div className="mb-4 flex justify-between items-center">
+              <h3 className="text-lg font-bold">Día {watch(`days.${activeDayIndex}.day`)}</h3>
               {dayFields.length > 1 && (
                 <button
                   type="button"
@@ -481,15 +473,14 @@ export default function NewRoutePage() {
                     removeDay(activeDayIndex);
                     if (activeDayIndex > 0) setActiveDayIndex(activeDayIndex - 1);
                   }}
-                  className="text-red-500 hover:text-red-700 text-sm flex items-center gap-1 self-end sm:self-auto"
+                  className="text-red-500 text-sm flex items-center gap-1"
                 >
-                  <Trash2 size={16} /> Eliminar día
+                  <Trash2 size={16} /> Eliminar
                 </button>
               )}
             </div>
 
             <div className="space-y-4">
-              {/* Número de día */}
               <div>
                 <label className="text-sm font-medium text-gray-700">Número de Día *</label>
                 <input
@@ -500,57 +491,42 @@ export default function NewRoutePage() {
                 />
               </div>
 
-              {/* Título */}
               <div>
-                <label className="text-sm font-medium text-gray-700">Título del Día *</label>
+                <label className="text-sm font-medium text-gray-700">Título *</label>
                 <input
                   {...register(`days.${activeDayIndex}.title`)}
                   className="w-full p-2 border rounded mt-1 text-sm text-black"
-                  placeholder="Introducción a la respiración consciente"
                 />
                 {errors.days?.[activeDayIndex]?.title && (
-                  <span className="text-red-500 text-xs">
-                    {errors.days[activeDayIndex]?.title?.message}
-                  </span>
+                  <span className="text-red-500 text-xs">{errors.days[activeDayIndex]?.title?.message}</span>
                 )}
               </div>
 
-              {/* Descripción */}
               <div>
-                <label className="text-sm font-medium text-gray-700">Descripción del Día *</label>
+                <label className="text-sm font-medium text-gray-700">Descripción *</label>
                 <textarea
                   {...register(`days.${activeDayIndex}.description`)}
                   className="w-full p-2 border rounded mt-1 text-sm h-20 text-black"
-                  placeholder="Aprende la técnica básica de respiración 4-7-8"
                 />
-                {errors.days?.[activeDayIndex]?.description && (
-                  <span className="text-red-500 text-xs">
-                    {errors.days[activeDayIndex]?.description?.message}
-                  </span>
-                )}
               </div>
 
-              {/* Exercise ID y Tiempo */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-700">ID de Ejercicio (UUID)</label>
+                  <label className="text-sm font-medium text-gray-700">ID Ejercicio (UUID)</label>
                   <input
                     {...register(`days.${activeDayIndex}.exerciseId`)}
                     className="w-full p-2 border rounded mt-1 text-sm text-black"
-                    placeholder="550e8400-e29b-41d4..."
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Tiempo Estimado *</label>
+                  <label className="text-sm font-medium text-gray-700">Tiempo *</label>
                   <input
                     {...register(`days.${activeDayIndex}.estimatedTime`)}
                     className="w-full p-2 border rounded mt-1 text-sm text-black"
-                    placeholder="10 minutos"
                   />
                 </div>
               </div>
 
-              {/* Objetivos */}
               <div>
                 <label className="text-sm font-medium text-gray-700">Objetivos</label>
                 <div className="space-y-2 mt-2">
@@ -559,24 +535,15 @@ export default function NewRoutePage() {
                       <input
                         {...register(`days.${activeDayIndex}.objectives.${index}`)}
                         className="flex-1 p-2 border rounded text-sm text-black"
-                        placeholder="Aprender técnica de respiración"
                       />
                       {objectiveFields.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeObjective(index)}
-                          className="text-red-500 hover:text-red-700"
-                        >
+                        <button type="button" onClick={() => removeObjective(index)} className="text-red-500">
                           <Trash2 size={18} />
                         </button>
                       )}
                     </div>
                   ))}
-                  <button
-                    type="button"
-                    onClick={() => appendObjective('')}
-                    className="text-blue-600 text-sm hover:text-blue-800 flex items-center gap-1"
-                  >
+                  <button type="button" onClick={() => appendObjective('' as any)} className="text-blue-600 text-sm flex items-center gap-1">
                     <Plus size={16} /> Agregar objetivo
                   </button>
                 </div>

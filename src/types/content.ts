@@ -120,43 +120,147 @@ export interface RouteListItem {
   version: number;
 }
 
-// Tipos para creación de rutas (POST /content)
-export type StepType =
-  | 'reflection_exercise'
-  | 'audio_meditation'
-  | 'article_and_task'
-  | 'journaling'
-  | 'breathing_exercise'
-  | 'video_lesson';
+// Tipos para creación de contenido (POST /content)
 
-export interface RouteStepContent {
-  instruction?: string;
-  extra_prompt?: string;
-  media_url?: string;
-  article?: string;
-  task?: string;
-  [key: string]: any; // Para flexibilidad en diferentes tipos de contenido
-}
-
-export interface RouteStep {
+// === ROUTE ===
+export interface RouteDay {
   day: number;
   title: string;
-  type: StepType;
-  content: RouteStepContent;
+  description: string;
+  exerciseId: string;
+  estimatedTime: string;
+  objectives: string[];
 }
 
-export interface RouteBody {
-  version: string;
+export interface RouteBodyContent {
   intro: string;
-  steps: RouteStep[];
+  duration: string;
+  difficulty: 'principiante' | 'intermedio' | 'avanzado';
+  estimatedDailyTime: string;
+  days: RouteDay[];
+  benefits: string[];
+  requirements: string[];
 }
 
 export interface CreateRoutePayload {
   type: 'route';
   title: string;
-  topic: string;
-  sources: string[];
-  body: RouteBody;
+  body: RouteBodyContent;
+  description?: string;
+  topic?: string;
+  locale?: 'es-LATAM' | 'pt-BR';
+  isPremium?: boolean;
+  isPublished?: boolean;
+  version?: number;
+  disclaimerId?: string;
+  sources?: string[];
+}
+
+// === EXERCISE ===
+export interface ExerciseStep {
+  step: number;
+  title: string;
+  instruction: string;
+  duration: string;
+  imageUrl?: string;
+  hasTimer?: boolean;
+  counterType?: 'inhale' | 'hold' | 'exhale';
+  repeatCycles?: number;
+}
+
+export interface ExerciseBodyContent {
+  introduction: string;
+  difficulty: 'principiante' | 'intermedio' | 'avanzado';
+  duration: string;
+  audioUrl?: string;
+  videoUrl?: string;
+  thumbnailUrl?: string;
+  steps: ExerciseStep[];
+  tips: string[];
+  contraindications: string[];
+  expectedResults: string;
+}
+
+export interface CreateExercisePayload {
+  type: 'exercise';
+  title: string;
+  body: ExerciseBodyContent;
+  description?: string;
+  topic?: string;
+  locale?: 'es-LATAM' | 'pt-BR';
+  isPremium?: boolean;
+  isPublished?: boolean;
+  version?: number;
+  sources?: string[];
+}
+
+// === ARTICLE ===
+export interface ArticleSection {
+  heading: string;
+  content?: string;
+  type: 'text' | 'list';
+  imageUrl?: string;
+  items?: string[];
+}
+
+export interface ArticleBodyContent {
+  coverImage: string;
+  author: string;
+  readingTime: string;
+  publishDate: string;
+  sections: ArticleSection[];
+  relatedExercises: string[];
+  tags: string[];
+}
+
+export interface CreateArticlePayload {
+  type: 'article';
+  title: string;
+  body: ArticleBodyContent;
+  description?: string;
+  topic?: string;
+  locale?: 'es-LATAM' | 'pt-BR';
+  isPremium?: boolean;
+  isPublished?: boolean;
+  version?: number;
+  disclaimerId?: string;
+  sources?: string[];
+}
+
+// Union type para todos los payloads
+export type CreateContentPayload = CreateRoutePayload | CreateExercisePayload | CreateArticlePayload;
+
+// Tipo para actualización de contenido (PATCH /content/{id})
+// Todos los campos son opcionales - solo envía los que quieres modificar
+export interface UpdateContentPayload {
+  title?: string;
+  description?: string;
+  topic?: string;
+  locale?: 'es-LATAM' | 'pt-BR';
+  isPremium?: boolean;
+  isPublished?: boolean;
+  version?: number;
+  disclaimerId?: string;
+  body?: Partial<RouteBodyContent> | Partial<ExerciseBodyContent> | Partial<ArticleBodyContent>;
+  sources?: string[];
+}
+
+// Tipo para la respuesta de GET /content/{id}
+export interface ContentDetail {
+  id: string;
+  type: 'route' | 'exercise' | 'article';
+  title: string;
+  description?: string;
+  topic?: string;
+  locale?: 'es-LATAM' | 'pt-BR';
+  isPremium?: boolean;
+  isPublished?: boolean;
+  version?: number;
+  disclaimerId?: string;
+  body: RouteBodyContent | ExerciseBodyContent | ArticleBodyContent;
+  sources?: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type BlockType = 'lesson_block' | 'activity_block' | 'reflection_block' | 'quick_tip_block' | 'checklist_block';

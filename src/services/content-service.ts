@@ -1,5 +1,5 @@
 import { apiClient } from '@/lib/api-client';
-import { RouteListItem, CreateRoutePayload } from '@/types/content';
+import { RouteListItem, CreateContentPayload, ContentDetail, UpdateContentPayload } from '@/types/content';
 
 export const contentService = {
   // Obtener el catálogo de rutas
@@ -8,9 +8,21 @@ export const contentService = {
     return response.data;
   },
 
-  // Crear nueva ruta
-  createRoute: async (data: CreateRoutePayload) => {
+  // Obtener detalle de un contenido por ID
+  getContentById: async (id: string): Promise<ContentDetail> => {
+    const response = await apiClient.get(`/content/routes/${id}`);
+    return response.data;
+  },
+
+  // Crear nuevo contenido (ruta, ejercicio o artículo)
+  createContent: async (data: CreateContentPayload) => {
     const response = await apiClient.post('/content', data);
+    return response.data;
+  },
+
+  // Actualizar contenido existente (todos los campos opcionales)
+  updateContent: async (id: string, data: UpdateContentPayload) => {
+    const response = await apiClient.patch(`/content/${id}`, data);
     return response.data;
   }
 };
