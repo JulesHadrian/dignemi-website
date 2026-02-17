@@ -67,7 +67,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
           {menuItems.map((item) => {
-            const isActive = pathname.startsWith(item.href);
+            // Find the most specific matching item (longest href that matches)
+            const matchingItems = menuItems.filter(
+              mi => pathname === mi.href || pathname.startsWith(mi.href + '/')
+            );
+            const activeItem = matchingItems.sort((a, b) => b.href.length - a.href.length)[0];
+            const isActive = item === activeItem;
+
             return (
               <Link
                 key={item.href}
@@ -99,7 +105,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Header */}
         <header className="bg-white shadow-sm h-16 flex items-center justify-between px-8 sticky top-0 z-0">
           <h2 className="text-xl font-semibold text-gray-800">
-            {menuItems.find(i => pathname.startsWith(i.href))?.name || 'Panel'}
+            {(() => {
+              const matchingItems = menuItems.filter(
+                mi => pathname === mi.href || pathname.startsWith(mi.href + '/')
+              );
+              const activeItem = matchingItems.sort((a, b) => b.href.length - a.href.length)[0];
+              return activeItem?.name || 'Panel';
+            })()}
           </h2>
           <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
