@@ -4,9 +4,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Search, Filter, Map, Loader2, AlertCircle } from 'lucide-react';
-import { StatusBadge } from '@/components/ui/status-badge';
 import { contentService } from '@/services/content-service';
-import { Route } from '@/types/content';
+import { RouteListItem } from '@/types/content';
 
 export default function RoutesPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -88,8 +87,7 @@ export default function RoutesPage() {
             <tr>
               <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Ruta</th>
               <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Tema</th>
-              <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Duración</th>
-              <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Estado</th>
+              <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Versión</th>
               <th className="px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Acciones</th>
             </tr>
           </thead>
@@ -104,22 +102,22 @@ export default function RoutesPage() {
                       </div>
                       <div>
                         <div className="font-medium text-gray-900">{route.title}</div>
-                        <div className="text-xs text-gray-500 uppercase">{route.level}</div>
+                        {route.description && (
+                          <div className="text-xs text-gray-500 mt-1">{route.description}</div>
+                        )}
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-600 capitalize">
-                    {/* Ajusta esto si tu API devuelve el objeto topic o solo el ID */}
-                    {typeof route.topic_id === 'string' ? route.topic_id : 'General'}
+                  <td className="px-6 py-4">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 capitalize">
+                      {route.topic}
+                    </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600">
-                    {route.duration_days} días
+                    v{route.version}
                   </td>
                   <td className="px-6 py-4">
-                    <StatusBadge status={route.status} />
-                  </td>
-                  <td className="px-6 py-4">
-                    <Link 
+                    <Link
                       href={`/dashboard/routes/${route.id}`}
                       className="text-blue-600 hover:text-blue-800 text-sm font-medium"
                     >
@@ -130,7 +128,7 @@ export default function RoutesPage() {
               ))
             ) : (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
                   No se encontraron rutas. Intenta crear una nueva.
                 </td>
               </tr>

@@ -111,6 +111,54 @@ export interface Activity extends BaseEntity {
 // 5. ROUTES / PROGRAMS (Rutas)
 // ==========================================
 
+// Tipo para el listado del catálogo (GET /content/catalog)
+export interface RouteListItem {
+  id: string;
+  title: string;
+  description: string | null;
+  topic: string;
+  version: number;
+}
+
+// Tipos para creación de rutas (POST /content)
+export type StepType =
+  | 'reflection_exercise'
+  | 'audio_meditation'
+  | 'article_and_task'
+  | 'journaling'
+  | 'breathing_exercise'
+  | 'video_lesson';
+
+export interface RouteStepContent {
+  instruction?: string;
+  extra_prompt?: string;
+  media_url?: string;
+  article?: string;
+  task?: string;
+  [key: string]: any; // Para flexibilidad en diferentes tipos de contenido
+}
+
+export interface RouteStep {
+  day: number;
+  title: string;
+  type: StepType;
+  content: RouteStepContent;
+}
+
+export interface RouteBody {
+  version: string;
+  intro: string;
+  steps: RouteStep[];
+}
+
+export interface CreateRoutePayload {
+  type: 'route';
+  title: string;
+  topic: string;
+  sources: string[];
+  body: RouteBody;
+}
+
 export type BlockType = 'lesson_block' | 'activity_block' | 'reflection_block' | 'quick_tip_block' | 'checklist_block';
 
 export interface RouteBlock {
